@@ -16,4 +16,5 @@ public class GetAllPostCardDetails {
     private long likeCount;
     private long commentCount;
     private String postImage;
+    private boolean likeStatus;
 }

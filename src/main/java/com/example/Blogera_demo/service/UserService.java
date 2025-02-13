@@ -1,6 +1,9 @@
 package com.example.Blogera_demo.service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,8 +29,6 @@ public class UserService {
     @Autowired
     private PostService postService;
 
-    @Autowired
-    private CommentService commentService;
 
     @Autowired
     private LikeService likeService;
@@ -62,9 +63,12 @@ public class UserService {
         }
         User user = optionalUser.get();
         // Ensure user details are valid
-        if (userDetails.getUsername() != null) user.setUsername(userDetails.getUsername());
-        if (userDetails.getEmail() != null) user.setEmail(userDetails.getEmail());
-        if (userDetails.getProfilePicture() != null) user.setProfilePicture(userDetails.getProfilePicture());
+        if (userDetails.getUsername() != null)
+            user.setUsername(userDetails.getUsername());
+        if (userDetails.getEmail() != null)
+            user.setEmail(userDetails.getEmail());
+        if (userDetails.getProfilePicture() != null)
+            user.setProfilePicture(userDetails.getProfilePicture());
         return userRepository.save(user);
     }
 
@@ -81,14 +85,12 @@ public class UserService {
     }
 
     public User getUserByEmail(String email) {
-        
+
         return userRepository.findByEmail(email).orElse(null);
     }
 
     public ResponseEntity<?> getUserCardData(String email) {
-        
-
-        // Safely retrieve user by email
+         ExecutorService executor = Executors.newFixedThreadPool(4);
         Optional<User> optionalUser = userRepository.findByEmail(email);
         if (optionalUser.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -97,49 +99,55 @@ public class UserService {
 
         User user = optionalUser.get();
         List<Post> posts = postService.getPostsByUserId(user.getId());
-        
 
-        // Handle empty or null posts
         if (posts == null || posts.isEmpty()) {
             return ResponseEntity.ok(Collections.emptyList()); // Return empty list instead of casting
         }
 
-        // Safely process each post
-        List<GetUserCardDetails> getCardDetailsList = posts.stream().map(post -> {
-            
-            // Ensure the repository call doesn't return null
-            List<String> images = Optional.ofNullable(postImageReposiroty.findByPostId(post.getId()))
-                                          .orElse(Collections.emptyList())
-                                          .stream()
-                                          .map(PostImage::getImageUrl)
-                                          .collect(Collectors.toList());
+        List<String> postIds = posts.stream().map(Post::getId).distinct().toList();
 
-            
-            String firstImage = images.isEmpty() ? null : images.get(0);
-            
-            long countLike = likeService.getLikesCountForPost(post.getId());
-            
-            long countComment = commentService.getCommentCountForPost(post.getId());
+        // Fetch likes asynchronously
+        CompletableFuture<Map<String, Boolean>> likeFuture = CompletableFuture.supplyAsync(
+                () -> likeService.getLikeStatus(user.getId(), postIds),
+                executor);
 
-            GetUserCardDetails getCardDetails = new GetUserCardDetails();
-            getCardDetails.setPostId(post.getId());
-            getCardDetails.setCommentCount(countComment);
-            getCardDetails.setLikeCount(countLike);
-            getCardDetails.setPostContent(post.getContent());
-            getCardDetails.setPostImage(firstImage);
-            getCardDetails.setPostTitle(post.getTitle());
+        // Fetch images asynchronously for each post
+        List<CompletableFuture<GetUserCardDetails>> postFutures = posts.stream()
+                .map(post -> CompletableFuture.supplyAsync(() -> {
+                    // List<String> images = Optional.ofNullable(postImageReposiroty.findByPostId(post.getId()))
+                    //         .orElse(Collections.emptyList())
+                    //         .stream()
+                    //         .map(PostImage::getImageUrl)
+                    //         .collect(Collectors.toList());
 
-            
-            return getCardDetails;
-        }).collect(Collectors.toList());
+                    // String firstImage = images.isEmpty() ? null : images.get(0);
 
-        // Safely prepare response
+                    boolean likeStatus = likeFuture.join().getOrDefault(post.getId(), false);
+
+                    GetUserCardDetails getCardDetails = new GetUserCardDetails();
+                    getCardDetails.setPostId(post.getId());
+                    getCardDetails.setCommentCount(post.getCommentCount());
+                    getCardDetails.setLikeCount(post.getLikeCount());
+                    getCardDetails.setPostContent(post.getContent());
+                    getCardDetails.setPostImage(null);  
+                    getCardDetails.setPostTitle(post.getTitle());
+                    getCardDetails.setLikeStatus(likeStatus);
+
+                    return getCardDetails;
+                }, executor))
+                .collect(Collectors.toList());
+
+        // Wait for all futures to complete
+        List<GetUserCardDetails> getCardDetailsList = postFutures.stream()
+                .map(CompletableFuture::join)
+                .collect(Collectors.toList());
+
+        // Prepare response
         Map<String, Object> responseBody = new HashMap<>();
         responseBody.put("user", Map.of(
                 "username", user.getUsername(),
                 "email", user.getEmail(),
-                "profilePicture", Optional.ofNullable(user.getProfilePicture()).orElse("")
-        ));
+                "profilePicture", Optional.ofNullable(user.getProfilePicture()).orElse("")));
         responseBody.put("posts", getCardDetailsList);
 
         return ResponseEntity.ok().body(responseBody);

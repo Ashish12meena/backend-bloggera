@@ -16,4 +16,5 @@ public class GetUserCardDetails {
     private String postImage;
     private long likeCount;
     private long commentCount;
+    private boolean likeStatus;
 }

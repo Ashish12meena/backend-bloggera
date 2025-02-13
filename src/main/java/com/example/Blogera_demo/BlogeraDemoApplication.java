@@ -9,4 +9,4 @@ public class BlogeraDemoApplication {
 		SpringApplication.run(BlogeraDemoApplication.class, args);
 	}
 }
-		
+			

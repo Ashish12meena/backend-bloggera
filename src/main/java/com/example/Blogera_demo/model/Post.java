@@ -30,6 +30,10 @@ public class Post {
     
     private String content;
 
+    private long likeCount;
+    private long commentCount;
+    private String postImage;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

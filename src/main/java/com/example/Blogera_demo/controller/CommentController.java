@@ -1,6 +1,7 @@
 package com.example.Blogera_demo.controller;
 
 import com.example.Blogera_demo.dto.CommentCardDetails;
+import com.example.Blogera_demo.dto.CommentDto;
 import com.example.Blogera_demo.model.Comment;
 import com.example.Blogera_demo.service.CommentService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,4 +61,13 @@ public class CommentController {
         String commentId  = request.get("commentId");
         return commentService.getCommentCardDetails(commentId);
     }
+
+
+    @PostMapping("/addComment")
+    public Comment addComment(@RequestBody CommentDto commentDto){
+        System.out.println(commentDto.getMessage()+"  "+commentDto.getPostId()+" before"+commentDto.getUserId()+" after");
+        return commentService.addComment(commentDto);
+        
+    }
+
 }

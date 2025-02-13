@@ -1,17 +1,27 @@
 package com.example.Blogera_demo.service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+
+import java.util.Collections;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
+
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+
 import java.util.stream.Collectors;
 
+// import org.slf4j.Logger;
+// import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
 import com.example.Blogera_demo.dto.GetAllPostCardDetails;
@@ -23,11 +33,15 @@ import com.example.Blogera_demo.model.User;
 import com.example.Blogera_demo.repository.PostRepository;
 import com.example.Blogera_demo.repository.AuthRepository;
 import com.example.Blogera_demo.repository.CommentRepository;
-import com.example.Blogera_demo.repository.LikeRepository;
+// import com.example.Blogera_demo.repository.LikeRepository;
 import com.example.Blogera_demo.repository.PostImageReposiroty;
 
 @Service
 public class PostService {
+
+    // private static final Logger logger =
+    // LoggerFactory.getLogger(PostService.class);
+
     @Autowired
     private PostRepository postRepository;
 
@@ -35,13 +49,19 @@ public class PostService {
     private AuthRepository userRepository;
 
     @Autowired
-    private LikeRepository likeRepository;
-
-    @Autowired
     private CommentRepository commentRepository;
 
     @Autowired
     private PostImageReposiroty imageReposiroty;
+
+    @Autowired
+    private LikeService likeService;
+
+    @Autowired
+    MongoTemplate mongoTemplate;
+
+    @Autowired
+    Executor taskExecutor;
 
     // private final ExecutorService executorService =
     // Executors.newFixedThreadPool(10);
@@ -70,123 +90,162 @@ public class PostService {
         return post.get();
     }
 
-    public GetFullPostDetail getFullPostDetails(String postId) {
+    public GetFullPostDetail getFullPostDetails(String postId, String currentUserId) {
+        System.out.println("postId " + postId + " userId " + currentUserId);
+        ExecutorService executor = Executors.newFixedThreadPool(4);
 
-        GetFullPostDetail getFullPostDetail = new GetFullPostDetail();
-        Post post = getPostsByPostId(postId);
-        User user = userRepository.findById(post.getUserId()).orElse(null);
+        CompletableFuture<Post> postFuture = CompletableFuture.supplyAsync(() -> getPostsByPostId(postId), executor);
+        CompletableFuture<List<String>> imagesFuture = CompletableFuture.supplyAsync(() -> imageReposiroty
+                .findByPostId(postId).stream().map(PostImage::getImageUrl).collect(Collectors.toList()), executor);
 
-        List<String> images = imageReposiroty.findByPostId(post.getId()).stream()
-                .map(PostImage::getImageUrl)
-                .collect(Collectors.toList());
+        CompletableFuture<List<String>> commentsFuture = CompletableFuture.supplyAsync(
+                () -> commentRepository.findByPostId(postId).stream().map(Comment::getId).collect(Collectors.toList()),
+                executor);
 
-        List<String> comments = commentRepository.findByPostId(post.getId()).stream()
-                .map(Comment::getId)
-                .collect(Collectors.toList());
+        CompletableFuture<Boolean> likeStatusFuture = CompletableFuture
+                .supplyAsync(() -> likeService.checkIfLiked(postId, currentUserId), executor);
 
-        long countLike = likeRepository.countByPostId(post.getId());
-        long countComment = commentRepository.countByPostId(post.getId());
+        Post post = postFuture.join();
+        CompletableFuture<User> userFuture = CompletableFuture
+                .supplyAsync(() -> userRepository.findById(post.getUserId()).orElse(null), executor);
+
+        User user = userFuture.join();
+        List<String> images = imagesFuture.join();
+        List<String> comments = commentsFuture.join();
+        boolean status = likeStatusFuture.join();
+        System.out.println(status + " Status of like");
+
+        executor.shutdown();
 
         String username = Optional.ofNullable(user).map(User::getUsername).orElse("Unknown");
         String profilePicture = Optional.ofNullable(user).map(User::getProfilePicture).orElse("");
 
+        GetFullPostDetail getFullPostDetail = new GetFullPostDetail();
         getFullPostDetail.setComments(comments);
-        getFullPostDetail.setCommentCount(countComment);
-        getFullPostDetail.setLikeCount(countLike);
+        getFullPostDetail.setCommentCount(post.getCommentCount());
+        getFullPostDetail.setLikeCount(post.getLikeCount());
         getFullPostDetail.setPostContent(post.getContent());
         getFullPostDetail.setPostImage(images);
         getFullPostDetail.setPostTitle(post.getTitle());
         getFullPostDetail.setProfilePicture(profilePicture);
         getFullPostDetail.setUsername(username);
+        getFullPostDetail.setLikeStatus(status);
 
         return getFullPostDetail;
-
     }
 
-    public List<GetAllPostCardDetails> getCardDetails() {
-        List<GetAllPostCardDetails> getAllPostCardDetails = new ArrayList<>();
+    public List<GetAllPostCardDetails> getCardDetails(String currentUserId) {
+
+        // Fetch posts in a single query
         List<Post> posts = postRepository.findAll();
+        if (posts.isEmpty())
+            return Collections.emptyList(); // Return early if no posts
 
-        // Create a thread pool with a fixed number of threads
-        ExecutorService executorService = Executors.newFixedThreadPool(4); // 4 threads for I/O tasks (user, images,
-                                                                           // like, comment)
+        // Extract user IDs & post IDs
+        List<String> userIds = posts.stream().map(Post::getUserId).distinct().toList();
+        List<String> postIds = posts.stream().map(Post::getId).distinct().toList();
 
-        List<Future<GetAllPostCardDetails>> futures = new ArrayList<>();
+        // Fetch users and like status concurrently
+        ExecutorService executor = Executors.newFixedThreadPool(3); // Use limited threads
+        CompletableFuture<Map<String, User>> userFuture = CompletableFuture.supplyAsync(
+                () -> userRepository.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, user -> user)),
+                executor);
+        CompletableFuture<Map<String, Boolean>> likeFuture = CompletableFuture.supplyAsync(
+                () -> likeService.getLikeStatus(currentUserId, postIds),
+                executor);
 
-        for (Post post : posts) {
-            futures.add(executorService.submit(() -> fetchUserForPost(post)));
-        }
+        // Wait for both tasks to complete
+        Map<String, User> userMap = userFuture.join();
+        Map<String, Boolean> likeStatusMap = likeFuture.join();
 
-        // Collect results from futures
-        for (Future<GetAllPostCardDetails> future : futures) {
-            try {
-                getAllPostCardDetails.add(future.get()); // Blocking call to get result
-            } catch (InterruptedException | ExecutionException e) {
-                e.printStackTrace();
-            }
-        }
+        // Process posts in parallel
+        List<GetAllPostCardDetails> postDetailsList = posts.parallelStream()
+                .map(post -> {
+                    User user = userMap.get(post.getUserId());
+                    GetAllPostCardDetails details = new GetAllPostCardDetails();
+                    details.setPostId(post.getId());
+                    details.setPostTitle(post.getTitle());
+                    details.setPostContent(post.getContent());
+                    details.setPostImage(post.getPostImage());
+                    details.setLikeCount(post.getLikeCount());
+                    details.setCommentCount(post.getCommentCount());
+                    details.setLikeStatus(likeStatusMap.getOrDefault(post.getId(), false));
 
-        executorService.shutdown(); // Shutdown executor service
-        return getAllPostCardDetails;
+                    if (user != null) {
+                        details.setUsername(user.getUsername());
+                        details.setProfilePicture(user.getProfilePicture());
+                    }
+                    return details;
+                }).toList(); // Parallel processing for better performance
+
+        executor.shutdown(); // Shutdown executor
+
+        return postDetailsList;
     }
 
-    public GetAllPostCardDetails fetchUserForPost(Post post) {
-        
-
-        final User[] user = new User[1];
-        final List<String>[] images = new List[1];
-        final long[] countLike = new long[1];
-        final long[] countComment = new long[1];
-
-        // Use a fixed thread pool to execute tasks in parallel
-        ExecutorService executorService = Executors.newFixedThreadPool(4); // 4 tasks for user, images, like, comment
-
-        // Use parallel tasks for each part
-        Future<?> userFuture = executorService.submit(() -> {
-            user[0] = userRepository.findById(post.getUserId()).orElse(null);
-        });
-
-        Future<?> imagesFuture = executorService.submit(() -> {
-            images[0] = imageReposiroty.findByPostId(post.getId()).stream()
-                    .map(PostImage::getImageUrl)
-                    .collect(Collectors.toList());
-        });
-
-        Future<?> likeFuture = executorService.submit(() -> {
-            countLike[0] = likeRepository.countByPostId(post.getId());
-        });
-
-        Future<?> commentFuture = executorService.submit(() -> {
-            countComment[0] = commentRepository.countByPostId(post.getId());
-        });
-
-        try {
-            // Wait for all tasks to complete
-            userFuture.get();
-            imagesFuture.get();
-            likeFuture.get();
-            commentFuture.get();
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace();
+    public List<GetAllPostCardDetails> getData() {
+        List<Post> posts = postRepository.findAll();
+        if (posts.isEmpty()) {
+            return Collections.emptyList();
         }
 
-        // Construct result after all tasks are completed
-        String username = Optional.ofNullable(user[0]).map(User::getUsername).orElse("Unknown");
-        String profilePicture = Optional.ofNullable(user[0]).map(User::getProfilePicture).orElse("");
-        String firstImage = (images[0] == null || images[0].isEmpty()) ? null : images[0].get(0);
+        // Fetch all users in a single query to avoid N+1 problem
+        List<String> userIds = posts.stream().map(Post::getUserId).toList();
+        Map<String, User> userMap = userRepository.findAllById(userIds)
+                .stream().collect(Collectors.toMap(User::getId, user -> user));
 
-        GetAllPostCardDetails postDetails = new GetAllPostCardDetails();
-        postDetails.setCommentCount(countComment[0]);
-        postDetails.setLikeCount(countLike[0]);
-        postDetails.setPostContent(post.getContent());
-        postDetails.setPostImage(firstImage);
-        postDetails.setPostTitle(post.getTitle());
-        postDetails.setProfilePicture(profilePicture);
-        postDetails.setUsername(username);
-        postDetails.setPostId(post.getId());
+        // Process each post asynchronously using Spring's thread pool
+        List<CompletableFuture<GetAllPostCardDetails>> futures = posts.stream()
+                .map(post -> CompletableFuture.supplyAsync(() -> mapPostToDetails(post, userMap), taskExecutor))
+                .toList();
 
-        executorService.shutdown(); // Shutdown executor service
-        return postDetails;
+        // Wait for all threads to complete and collect results
+        return futures.stream()
+                .map(CompletableFuture::join)
+                .collect(Collectors.toList());
+    }
+
+    private GetAllPostCardDetails mapPostToDetails(Post post, Map<String, User> userMap) {
+        User user = userMap.get(post.getUserId());
+        GetAllPostCardDetails details = new GetAllPostCardDetails();
+        details.setCommentCount(post.getCommentCount());
+        details.setLikeCount(post.getLikeCount());
+        details.setPostContent(post.getContent());
+        details.setPostId(post.getId());
+        details.setPostImage(post.getPostImage());
+        details.setPostTitle(post.getTitle());
+
+        if (user != null) {
+            details.setUsername(user.getUsername());
+            details.setProfilePicture(user.getProfilePicture());
+        }
+
+        return details;
+    }
+
+    public void incrementLikeCount(String postId) {
+
+        Query query = new Query(Criteria.where("id").is(postId));
+        Update update = new Update().inc("likeCount", 1); // Increment likeCount by 1
+        mongoTemplate.updateFirst(query, update, Post.class);
+    }
+
+    public void decrementLikeCount(String postId) {
+        Query query = new Query(Criteria.where("id").is(postId));
+        Update update = new Update().inc("likeCount", -1); // Decrease likeCount by 1
+        mongoTemplate.updateFirst(query, update, Post.class);
+    }
+
+    public void incrementCommentCount(String postId) {
+        Query query = new Query(Criteria.where("id").is(postId));
+        Update update = new Update().inc("commentCount", 1); // Increment likeCount by 1
+        mongoTemplate.updateFirst(query, update, Post.class);
+    }
+
+    public void decrementCommentCount(String postId) {
+        Query query = new Query(Criteria.where("id").is(postId));
+        Update update = new Update().inc("commentCount", -1); // Increment likeCount by 1
+        mongoTemplate.updateFirst(query, update, Post.class);
     }
 
 }

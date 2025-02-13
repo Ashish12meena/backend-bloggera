@@ -1,6 +1,7 @@
 package com.example.Blogera_demo.service;
 
 import com.example.Blogera_demo.dto.CommentCardDetails;
+import com.example.Blogera_demo.dto.CommentDto;
 import com.example.Blogera_demo.exceptions.ResourceNotFoundException;
 import com.example.Blogera_demo.model.Comment;
 import com.example.Blogera_demo.model.User;
@@ -8,8 +9,10 @@ import com.example.Blogera_demo.repository.CommentRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +25,13 @@ public class CommentService {
     @Autowired
     @Lazy
     private UserService userService;
+
+    @Autowired
+    @Lazy
+    private PostService postService;
+
+    @Autowired
+    MongoTemplate mongoTemplate;
 
     // Create a new comment
     public Comment createComment(Comment comment) {
@@ -84,5 +94,18 @@ public class CommentService {
         commentCardDetails.setLocalDateTime(comment.getLocalDateTime());
 
         return commentCardDetails;
+    }
+
+    public Comment addComment(CommentDto commentDto) {
+        System.out.println("in addComment" + commentDto.getUserId());
+        Comment comment = new Comment();
+        // postService.getPostsByPostId();
+        comment.setLocalDateTime(LocalDateTime.now());
+        comment.setMessage(commentDto.getMessage());
+        comment.setPostId(commentDto.getPostId());
+        comment.setUserId(commentDto.getUserId());
+         postService.incrementCommentCount(commentDto.getPostId());
+        return commentRepository.save(comment);
+
     }
 }
