@@ -15,9 +15,9 @@ import com.example.Blogera_demo.dto.FindUserByEmial;
 import com.example.Blogera_demo.dto.GetUserCardDetails;
 import com.example.Blogera_demo.dto.UserDetails;
 import com.example.Blogera_demo.model.Post;
-import com.example.Blogera_demo.model.PostImage;
+
 import com.example.Blogera_demo.model.User;
-import com.example.Blogera_demo.repository.PostImageReposiroty;
+
 import com.example.Blogera_demo.repository.UserRepository;
 
 @Service
@@ -33,8 +33,7 @@ public class UserService {
     @Autowired
     private LikeService likeService;
 
-    @Autowired
-    private PostImageReposiroty postImageReposiroty;
+   
 
     // Create a new user
     public User createUser(User user) {
@@ -53,6 +52,13 @@ public class UserService {
     // Retrieve all users
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    public List<String> getAllUserId(){
+        return userRepository.findAll()
+                             .stream()
+                             .map(User::getId)  
+                             .collect(Collectors.toList());
     }
 
     // Update a user

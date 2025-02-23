@@ -62,15 +62,13 @@ public class LikeService {
     public Map<String, Boolean> getLikeStatus(String userId, List<String> postIds) {
         List<Like> likedPosts = likeRepository.findByUserIdAndPostIdIn(userId, postIds);
         Map<String, Boolean> likeStatusMap = likedPosts.stream()
-                .collect(Collectors.toMap(Like::getPostId, like -> true));
+                .collect(Collectors.toMap(Like::getPostId, _ -> true));
 
         for (String postId : postIds) {
             likeStatusMap.putIfAbsent(postId, false);
         }
 
         return likeStatusMap;
-
-
     }
 
     public Like addLike(String postId, String userId) {

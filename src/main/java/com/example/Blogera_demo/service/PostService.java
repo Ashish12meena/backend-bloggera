@@ -1,40 +1,47 @@
 package com.example.Blogera_demo.service;
 
 import java.time.LocalDateTime;
-
+import java.util.ArrayList;
 import java.util.Collections;
-
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 // import org.slf4j.Logger;
 // import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.example.Blogera_demo.dto.GetAllPostCardDetails;
 import com.example.Blogera_demo.dto.GetFullPostDetail;
 import com.example.Blogera_demo.model.Comment;
 import com.example.Blogera_demo.model.Post;
-import com.example.Blogera_demo.model.PostImage;
+
 import com.example.Blogera_demo.model.User;
 import com.example.Blogera_demo.repository.PostRepository;
 import com.example.Blogera_demo.repository.AuthRepository;
 import com.example.Blogera_demo.repository.CommentRepository;
 // import com.example.Blogera_demo.repository.LikeRepository;
-import com.example.Blogera_demo.repository.PostImageReposiroty;
 
 @Service
 public class PostService {
@@ -52,13 +59,13 @@ public class PostService {
     private CommentRepository commentRepository;
 
     @Autowired
-    private PostImageReposiroty imageReposiroty;
-
-    @Autowired
     private LikeService likeService;
 
     @Autowired
     MongoTemplate mongoTemplate;
+
+    @Autowired
+    ImageUploaderService imageUploaderService;
 
     @Autowired
     Executor taskExecutor;
@@ -95,8 +102,10 @@ public class PostService {
         ExecutorService executor = Executors.newFixedThreadPool(4);
 
         CompletableFuture<Post> postFuture = CompletableFuture.supplyAsync(() -> getPostsByPostId(postId), executor);
-        CompletableFuture<List<String>> imagesFuture = CompletableFuture.supplyAsync(() -> imageReposiroty
-                .findByPostId(postId).stream().map(PostImage::getImageUrl).collect(Collectors.toList()), executor);
+        // CompletableFuture<List<String>> imagesFuture =
+        // CompletableFuture.supplyAsync(() -> imageReposiroty
+        // .findByPostId(postId).stream().map(PostImage::getImageUrl).collect(Collectors.toList()),
+        // executor);
 
         CompletableFuture<List<String>> commentsFuture = CompletableFuture.supplyAsync(
                 () -> commentRepository.findByPostId(postId).stream().map(Comment::getId).collect(Collectors.toList()),
@@ -110,7 +119,7 @@ public class PostService {
                 .supplyAsync(() -> userRepository.findById(post.getUserId()).orElse(null), executor);
 
         User user = userFuture.join();
-        List<String> images = imagesFuture.join();
+
         List<String> comments = commentsFuture.join();
         boolean status = likeStatusFuture.join();
         System.out.println(status + " Status of like");
@@ -125,7 +134,7 @@ public class PostService {
         getFullPostDetail.setCommentCount(post.getCommentCount());
         getFullPostDetail.setLikeCount(post.getLikeCount());
         getFullPostDetail.setPostContent(post.getContent());
-        getFullPostDetail.setPostImage(images);
+        getFullPostDetail.setPostImage(post.getPostImage());
         getFullPostDetail.setPostTitle(post.getTitle());
         getFullPostDetail.setProfilePicture(profilePicture);
         getFullPostDetail.setUsername(username);
@@ -134,10 +143,19 @@ public class PostService {
         return getFullPostDetail;
     }
 
-    public List<GetAllPostCardDetails> getCardDetails(String currentUserId) {
+    public List<GetAllPostCardDetails> getCardDetails(String currentUserId,Set<String> excludedIds, List<String> categories) {
 
         // Fetch posts in a single query
-        List<Post> posts = postRepository.findAll();
+        List<Post> posts=  new ArrayList<>();
+        try {
+            posts = getAllFilteredPosts(excludedIds, categories);
+        } catch (InterruptedException e) {
+            
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            
+            e.printStackTrace();
+        }
         if (posts.isEmpty())
             return Collections.emptyList(); // Return early if no posts
 
@@ -246,6 +264,130 @@ public class PostService {
         Query query = new Query(Criteria.where("id").is(postId));
         Update update = new Update().inc("commentCount", -1); // Increment likeCount by 1
         mongoTemplate.updateFirst(query, update, Post.class);
+    }
+
+    public ResponseEntity<String> addPost(String userId, Post post, MultipartFile postImage) {
+        if (postImage == null || postImage.isEmpty()) {
+            createPost(userId, post);
+            return ResponseEntity.ok("Post added successfully, no image uploaded.");
+        }
+
+        String url = imageUploaderService.uploadImage(postImage);
+        if (!url.isEmpty()) {
+            post.setPostImage(url);
+            createPost(userId, post);
+            return ResponseEntity.ok(url);
+        }
+
+        return ResponseEntity.badRequest().body("Image upload failed.");
+    }
+
+    public List<Post> getAllPosts(Set<String> excludedIds) {
+        System.out.println(excludedIds + "get All post in service");
+        AggregationOperation matchStage = Aggregation.match(
+                org.springframework.data.mongodb.core.query.Criteria.where("_id").nin(excludedIds));
+
+        AggregationOperation sampleStage = Aggregation.sample(30);
+        Aggregation aggregation = Aggregation.newAggregation(matchStage, sampleStage);
+        AggregationResults<Post> results = mongoTemplate.aggregate(aggregation, "post", Post.class);
+
+        return results.getMappedResults();
+    }
+
+
+    public List<Post> getAllFilteredPosts(Set<String> excludedIds, List<String> categories)
+    throws InterruptedException, ExecutionException {
+                
+        System.out.println(excludedIds + " " + categories);
+        Set<Post> uniquePosts = ConcurrentHashMap.newKeySet();
+
+        ExecutorService executorService = Executors.newFixedThreadPool(4);
+
+        try {
+            // Submit tasks to run in parallel
+            List<Future<List<Post>>> futures = new ArrayList<>();
+            futures.add(executorService.submit(() -> getMostLikedPosts(excludedIds)));
+            futures.add(executorService.submit(() -> getMostCommentedPosts(excludedIds)));
+            futures.add(executorService.submit(() -> getMostSimilartoCategoryPosts(excludedIds, categories)));
+            futures.add(executorService.submit(() -> getRandomPosts(excludedIds)));
+
+            // Collect the results
+            for (Future<List<Post>> future : futures) {
+                uniquePosts.addAll(future.get()); // Add list elements to the set
+            }
+        } finally {
+            executorService.shutdown();
+        }
+
+        List<Post> finalPosts = new ArrayList<>(uniquePosts);
+
+        return finalPosts;
+
+    }
+
+    public List<Post> getRandomPosts(Set<String> excludedIds) {
+        if (excludedIds == null) {
+            excludedIds = new HashSet<>();
+        }
+
+        // Match stage to exclude specific IDs
+        AggregationOperation matchStage = Aggregation.match(
+                org.springframework.data.mongodb.core.query.Criteria.where("_id").nin(excludedIds));
+
+        // Sample stage to get 10 random posts
+        AggregationOperation sampleStage = Aggregation.sample(10);
+
+        // Aggregation pipeline with match and sample
+        Aggregation aggregation = Aggregation.newAggregation(matchStage, sampleStage);
+
+        AggregationResults<Post> results = mongoTemplate.aggregate(aggregation, "post", Post.class);
+
+        return results.getMappedResults();
+    }
+
+    public List<Post> getMostLikedPosts(Set<String> excludedIds) {
+        Criteria criteria = new Criteria();
+        if (excludedIds != null && !excludedIds.isEmpty()) {
+            criteria.and("_id").nin(excludedIds);
+        }
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(criteria),
+                Aggregation.sort(Sort.by(Sort.Direction.DESC, "likeCount")),
+                Aggregation.limit(10));
+
+        return mongoTemplate.aggregate(aggregation, "post", Post.class).getMappedResults();
+    }
+
+    public List<Post> getMostCommentedPosts(Set<String> excludedIds) {
+        Criteria criteria = new Criteria();
+        if (excludedIds != null && !excludedIds.isEmpty()) {
+            criteria.and("_id").nin(excludedIds);
+        }
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(criteria),
+                Aggregation.sort(Sort.by(Sort.Direction.DESC, "commentCount")),
+                Aggregation.limit(10));
+
+        return mongoTemplate.aggregate(aggregation, "post", Post.class).getMappedResults();
+    }
+
+    public List<Post> getMostSimilartoCategoryPosts(Set<String> excludedIds, List<String> categories) {
+        if (categories == null || categories.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Criteria criteria = Criteria.where("categories").in(categories);
+        if (excludedIds != null && !excludedIds.isEmpty()) {
+            criteria.and("_id").nin(excludedIds);
+        }
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(criteria),
+                Aggregation.sample(10));
+
+        return mongoTemplate.aggregate(aggregation, "post", Post.class).getMappedResults();
     }
 
 }

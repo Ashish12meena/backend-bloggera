@@ -7,14 +7,13 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Document(collection = "categories")
 @Data
-@AllArgsConstructor
 @NoArgsConstructor
-public class Category {
-
+@AllArgsConstructor
+@Document(collection = "saved")
+public class SavedPost {
     @Id
     private String id;
-    private String name;
-    private String description;
+    private String userId;
+    private String postId;
 }

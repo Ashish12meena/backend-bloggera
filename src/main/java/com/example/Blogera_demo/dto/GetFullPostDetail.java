@@ -14,7 +14,7 @@ public class GetFullPostDetail {
     private String profilePicture;
     private String postTitle;
     private String postContent;
-    private List<String> postImage; 
+    private String postImage; 
     private long likeCount;
     private List<String> comments;
     private long commentCount;
