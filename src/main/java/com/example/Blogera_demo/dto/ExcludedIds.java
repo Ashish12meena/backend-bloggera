@@ -10,4 +10,6 @@ public class ExcludedIds {
     private Set<String> excludedIds;
     private List<String> listOfCategories;
     private String userId;
+    private String text;
+    private Integer sample;
 }

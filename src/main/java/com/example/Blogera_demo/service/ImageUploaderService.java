@@ -22,15 +22,18 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 // import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.example.Blogera_demo.serviceInterface.ImageUploaderServiceInterface;
 
 @Service
-public class ImageUploaderService {
+public class ImageUploaderService implements ImageUploaderServiceInterface{
     @Autowired
     private AmazonS3 client;
 
     @Value("${app.s3.bucket}")
     private String bucketName;
 
+
+    @Override
     public String uploadImage(MultipartFile image) {
         if (image == null) {
             return "image cannot be null";
@@ -55,6 +58,8 @@ public class ImageUploaderService {
         return null;
     }
 
+    // get Url of all Images
+    @Override
     public List<String> allFiles() {
         ListObjectsV2Request listObjectsV2Request = new ListObjectsV2Request().withBucketName(bucketName);
 
@@ -65,6 +70,7 @@ public class ImageUploaderService {
         return listOfFiles;
     }
 
+    @Override
     public String preSignedUrl(String filename) {
         GeneratePresignedUrlRequest generatePresignedUrlRequest = new GeneratePresignedUrlRequest(bucketName, filename)
                 .withMethod(HttpMethod.GET);
@@ -73,6 +79,8 @@ public class ImageUploaderService {
         return url.toString();
     }
 
+    //get public url
+    @Override
     public String getPublicUrl(String filename) {
         URL url = client.getUrl(bucketName, filename);
         return url.toString(); // Convert URL object to String

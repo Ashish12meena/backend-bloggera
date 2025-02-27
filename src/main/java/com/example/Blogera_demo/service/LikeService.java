@@ -17,9 +17,10 @@ import com.example.Blogera_demo.dto.CountLikeComment;
 import com.example.Blogera_demo.model.Like;
 
 import com.example.Blogera_demo.repository.LikeRepository;
+import com.example.Blogera_demo.serviceInterface.LikeServiceInterface;
 
 @Service
-public class LikeService {
+public class LikeService implements LikeServiceInterface {
 
     @Autowired
     private LikeRepository likeRepository;
@@ -34,6 +35,8 @@ public class LikeService {
     @Lazy
     private CommentService commentService;
 
+    //Create Like Document
+    @Override
     public Like createLike(Like like) {
         // Create a new Like object
         like.setCreatedAt(LocalDateTime.now());
@@ -41,24 +44,32 @@ public class LikeService {
         return likeRepository.save(like);
     }
 
+    //get List of Like document for single post
+    @Override
     public List<Like> getLikesForPost(String postId) {
         // Fetch likes based on postId
         return likeRepository.findByPostId(postId);
     }
 
+    //get list of like by user 
+    @Override
     public List<Like> getLikesByUser(String userId) {
         // Fetch likes based on userId
         return likeRepository.findByUserId(userId);
     }
 
-    public Long     getLikesCountForPost(String postId) {
+    @Override
+    public Long getLikesCountForPost(String postId) {
         return likeRepository.countByPostId(postId);
     }
 
+    @Override
     public boolean checkIfLiked(String postId, String userId) {
         return likeRepository.existsByUserIdAndPostId(userId, postId);
     }
 
+    //get map of Like Status which have combination of postId and boolean value
+    @Override
     public Map<String, Boolean> getLikeStatus(String userId, List<String> postIds) {
         List<Like> likedPosts = likeRepository.findByUserIdAndPostIdIn(userId, postIds);
         Map<String, Boolean> likeStatusMap = likedPosts.stream()
@@ -71,6 +82,8 @@ public class LikeService {
         return likeStatusMap;
     }
 
+    //Add Like document
+    @Override
     public Like addLike(String postId, String userId) {
         Like like = new Like();
         like.setCreatedAt(LocalDateTime.now());
@@ -81,8 +94,8 @@ public class LikeService {
 
         return likeRepository.save(like);
     }
-    // Helper method to increment the likeCount for a given post
 
+    @Override
     public void removeLike(String postId, String userId) {
         postService.decrementLikeCount(postId);
         System.out.println("Like Count decerem");
@@ -90,6 +103,8 @@ public class LikeService {
 
     }
 
+    // get count of like and comment of post
+    @Override
     public CountLikeComment getCountLikeComment(String postId) {
         CountLikeComment countLikeComment = new CountLikeComment();
         long commentCount = commentService.getCommentCountForPost(postId);

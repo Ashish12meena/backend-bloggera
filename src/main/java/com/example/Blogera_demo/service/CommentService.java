@@ -6,6 +6,7 @@ import com.example.Blogera_demo.exceptions.ResourceNotFoundException;
 import com.example.Blogera_demo.model.Comment;
 import com.example.Blogera_demo.model.User;
 import com.example.Blogera_demo.repository.CommentRepository;
+import com.example.Blogera_demo.serviceInterface.CommentServiceInterface;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -17,7 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
-public class CommentService {
+public class CommentService implements CommentServiceInterface {
 
     @Autowired
     private CommentRepository commentRepository;
@@ -34,32 +35,38 @@ public class CommentService {
     MongoTemplate mongoTemplate;
 
     // Create a new comment
+    @Override
     public Comment createComment(Comment comment) {
         return commentRepository.save(comment);
     }
 
     // Retrieve a comment by ID
+    @Override
     public Comment getCommentById(String id) {
         Optional<Comment> comment = commentRepository.findById(id);
         return comment.get();
     }
 
     // Retrieve all comments
+    @Override
     public List<Comment> getAllComments() {
         return commentRepository.findAll();
     }
 
     // Retrieve comments by userId
+    @Override
     public List<Comment> getCommentsByUserId(String userId) {
         return commentRepository.findByUserId(userId);
     }
 
     // Retrieve comments by postId
+    @Override
     public List<Comment> getCommentsByPostId(String postId) {
         return commentRepository.findByPostId(postId);
     }
 
     // Update a comment
+    @Override
     public Comment updateComment(String id, Comment commentDetails) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment not found for this id :: " + id));
@@ -70,16 +77,21 @@ public class CommentService {
     }
 
     // Delete a comment
+    @Override
     public void deleteComment(String id) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment not found for this id :: " + id));
         commentRepository.delete(comment);
     }
 
+    //get Comment Count By post
+    @Override
     public long getCommentCountForPost(String postId) {
         return commentRepository.countByPostId(postId);
     }
 
+    //get Comment Card Details 
+    @Override
     public CommentCardDetails getCommentCardDetails(String commentId) {
         CommentCardDetails commentCardDetails = new CommentCardDetails();
         Comment comment = getCommentById(commentId);
@@ -96,6 +108,8 @@ public class CommentService {
         return commentCardDetails;
     }
 
+    //Add Comment 
+    @Override
     public Comment addComment(CommentDto commentDto) {
         System.out.println("in addComment" + commentDto.getUserId());
         Comment comment = new Comment();

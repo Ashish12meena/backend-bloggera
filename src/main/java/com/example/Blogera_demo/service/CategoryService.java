@@ -9,12 +9,14 @@ import org.springframework.stereotype.Service;
 import com.example.Blogera_demo.dto.GetCategories;
 import com.example.Blogera_demo.model.Category;
 import com.example.Blogera_demo.repository.CategoryRepository;
+import com.example.Blogera_demo.serviceInterface.CategoryInterface;
 
 @Service
-public class CategoryService {
+public class CategoryService implements CategoryInterface{
     @Autowired
     private CategoryRepository categoryRepository;
 
+    @Override
     public List<GetCategories> getCategories() {
 
         

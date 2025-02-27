@@ -10,13 +10,15 @@ import org.springframework.stereotype.Service;
 import com.example.Blogera_demo.dto.SavedPostDto;
 import com.example.Blogera_demo.model.SavedPost;
 import com.example.Blogera_demo.repository.SavedPostRepository;
+import com.example.Blogera_demo.serviceInterface.SavedPostServiceInterface;
 
 @Service
-public class SavedPostService {
+public class SavedPostService implements SavedPostServiceInterface {
 
     @Autowired
     private SavedPostRepository savedPostRepository;
 
+    @Override
     public ResponseEntity<SavedPostDto> addSavedPost(String userId, String postId) {
         SavedPost savedPost = new SavedPost();
         savedPost.setUserId(userId);
@@ -27,6 +29,7 @@ public class SavedPostService {
         return ResponseEntity.ok(dto);
     }
 
+    @Override
     public ResponseEntity<List<SavedPostDto>> getSavedPost(String userId) {
         List<SavedPost> listOfSavedPosts = savedPostRepository.findByUserId(userId);
 
@@ -37,6 +40,7 @@ public class SavedPostService {
         return ResponseEntity.ok(dtos);
     }
 
+    @Override
     public ResponseEntity<?> removeSavedPost(String userId, String postId) {
         savedPostRepository.deleteByUserIdAndPostId(userId, postId);
         return ResponseEntity.ok("Removed successfully");

@@ -119,5 +119,11 @@ public class PostController {
         return postService.getRandomPosts(excludedIds.getExcludedIds());
 
     }
+    @PostMapping("/search")
+    public List<GetAllPostCardDetails> searchPosts(@RequestBody ExcludedIds excludedIds) {
+        System.out.println(excludedIds.getExcludedIds()+" "+excludedIds.getText()+" "+excludedIds.getSample());
+        return postService.searchPostByText(excludedIds);
+        // return null;
+    }
 
-}
+}   

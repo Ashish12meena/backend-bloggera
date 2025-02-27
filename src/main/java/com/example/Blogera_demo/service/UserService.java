@@ -19,9 +19,10 @@ import com.example.Blogera_demo.model.Post;
 import com.example.Blogera_demo.model.User;
 
 import com.example.Blogera_demo.repository.UserRepository;
+import com.example.Blogera_demo.serviceInterface.UserServiceInterface;
 
 @Service
-public class UserService {
+public class UserService implements UserServiceInterface {
 
     @Autowired
     private UserRepository userRepository;
@@ -36,6 +37,7 @@ public class UserService {
    
 
     // Create a new user
+    @Override
     public User createUser(User user) {
         // Ensure user object is not null and has required fields
         if (user == null || user.getUsername() == null || user.getEmail() == null) {
@@ -45,11 +47,13 @@ public class UserService {
     }
 
     // Retrieve a user by ID
+    @Override
     public Optional<User> getUserById(String id) {
         return userRepository.findById(id);
     }
 
     // Retrieve all users
+    @Override
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
@@ -62,6 +66,7 @@ public class UserService {
     }
 
     // Update a user
+    @Override
     public User updateUser(String id, User userDetails) {
         Optional<User> optionalUser = userRepository.findById(id);
         if (optionalUser.isEmpty()) {
@@ -79,6 +84,7 @@ public class UserService {
     }
 
     // Delete a user
+    @Override
     public void deleteUser(String id) {
         if (!userRepository.existsById(id)) {
             throw new NoSuchElementException("User with ID " + id + " not found");
@@ -86,15 +92,18 @@ public class UserService {
         userRepository.deleteById(id);
     }
 
+    @Override
     public User getUserByUsername(String username) {
         return userRepository.findByUsername(username);
     }
 
+    @Override
     public User getUserByEmail(String email) {
 
         return userRepository.findByEmail(email).orElse(null);
     }
 
+    @Override
     public ResponseEntity<?> getUserCardData(String email) {
          ExecutorService executor = Executors.newFixedThreadPool(4);
         Optional<User> optionalUser = userRepository.findByEmail(email);
@@ -120,13 +129,6 @@ public class UserService {
         // Fetch images asynchronously for each post
         List<CompletableFuture<GetUserCardDetails>> postFutures = posts.stream()
                 .map(post -> CompletableFuture.supplyAsync(() -> {
-                    // List<String> images = Optional.ofNullable(postImageReposiroty.findByPostId(post.getId()))
-                    //         .orElse(Collections.emptyList())
-                    //         .stream()
-                    //         .map(PostImage::getImageUrl)
-                    //         .collect(Collectors.toList());
-
-                    // String firstImage = images.isEmpty() ? null : images.get(0);
 
                     boolean likeStatus = likeFuture.join().getOrDefault(post.getId(), false);
 
@@ -159,6 +161,7 @@ public class UserService {
         return ResponseEntity.ok().body(responseBody);
     }
 
+    @Override
     public UserDetails validateToken(FindUserByEmial findUserByEmial) {
         User user = getUserByEmail(findUserByEmial.getEmail());
         UserDetails userDetails = new UserDetails();

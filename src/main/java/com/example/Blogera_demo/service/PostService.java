@@ -32,6 +32,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.example.Blogera_demo.dto.ExcludedIds;
 import com.example.Blogera_demo.dto.GetAllPostCardDetails;
 import com.example.Blogera_demo.dto.GetFullPostDetail;
 import com.example.Blogera_demo.model.Comment;
@@ -39,12 +40,13 @@ import com.example.Blogera_demo.model.Post;
 
 import com.example.Blogera_demo.model.User;
 import com.example.Blogera_demo.repository.PostRepository;
+import com.example.Blogera_demo.serviceInterface.PostServiceInterface;
 import com.example.Blogera_demo.repository.AuthRepository;
 import com.example.Blogera_demo.repository.CommentRepository;
 // import com.example.Blogera_demo.repository.LikeRepository;
 
 @Service
-public class PostService {
+public class PostService implements PostServiceInterface{
 
     // private static final Logger logger =
     // LoggerFactory.getLogger(PostService.class);
@@ -70,9 +72,8 @@ public class PostService {
     @Autowired
     Executor taskExecutor;
 
-    // private final ExecutorService executorService =
-    // Executors.newFixedThreadPool(10);
 
+    //Create Post
     public Post createPost(String userId, Post post) {
 
         Optional<User> userOptional = userRepository.findById(userId);
@@ -88,25 +89,23 @@ public class PostService {
         }
     }
 
+    // get Post By UserId
     public List<Post> getPostsByUserId(String email) {
         return postRepository.findByUserId(email);
     }
 
+    //get Post By PostId
     public Post getPostsByPostId(String postId) {
         Optional<Post> post = postRepository.findById(postId);
         return post.get();
     }
 
+    // get GetFullPostDetail By postId and UserId
     public GetFullPostDetail getFullPostDetails(String postId, String currentUserId) {
         System.out.println("postId " + postId + " userId " + currentUserId);
         ExecutorService executor = Executors.newFixedThreadPool(4);
 
         CompletableFuture<Post> postFuture = CompletableFuture.supplyAsync(() -> getPostsByPostId(postId), executor);
-        // CompletableFuture<List<String>> imagesFuture =
-        // CompletableFuture.supplyAsync(() -> imageReposiroty
-        // .findByPostId(postId).stream().map(PostImage::getImageUrl).collect(Collectors.toList()),
-        // executor);
-
         CompletableFuture<List<String>> commentsFuture = CompletableFuture.supplyAsync(
                 () -> commentRepository.findByPostId(postId).stream().map(Comment::getId).collect(Collectors.toList()),
                 executor);
@@ -143,6 +142,7 @@ public class PostService {
         return getFullPostDetail;
     }
 
+    // get List of post Card Details of specific user 
     public List<GetAllPostCardDetails> getCardDetails(String currentUserId,Set<String> excludedIds, List<String> categories) {
 
         // Fetch posts in a single query
@@ -201,6 +201,7 @@ public class PostService {
         return postDetailsList;
     }
 
+    // get list of All PostCardDetails 
     public List<GetAllPostCardDetails> getData() {
         List<Post> posts = postRepository.findAll();
         if (posts.isEmpty()) {
@@ -223,6 +224,7 @@ public class PostService {
                 .collect(Collectors.toList());
     }
 
+    
     private GetAllPostCardDetails mapPostToDetails(Post post, Map<String, User> userMap) {
         User user = userMap.get(post.getUserId());
         GetAllPostCardDetails details = new GetAllPostCardDetails();
@@ -388,6 +390,102 @@ public class PostService {
                 Aggregation.sample(10));
 
         return mongoTemplate.aggregate(aggregation, "post", Post.class).getMappedResults();
+    }
+
+
+    //Search based on list of categories
+    private List<Post> searchByCategories(Set<String> excludedIds, List<String> categories, Integer sample) {
+        List<Criteria> criteriaList = new ArrayList<>();
+        
+        if (excludedIds != null && !excludedIds.isEmpty()) {
+            criteriaList.add(Criteria.where("_id").nin(excludedIds));
+        }
+        
+        criteriaList.add(Criteria.where("categories").in(categories));
+        
+        return executeAggregation(new Criteria().andOperator(criteriaList.toArray(new Criteria[0])), sample);
+    }
+
+    //search based on categories than filtered out from them on the base of text 
+    public List<Post> searchByCategoriesThenText(Set<String> excludedIds, List<String> categories, String searchText, Integer sample) {
+        if (categories == null || categories.isEmpty()) {
+            return Collections.emptyList();
+        }
+    
+        Criteria criteria = Criteria.where("categories").in(categories);
+    
+        if (excludedIds != null && !excludedIds.isEmpty()) {
+            criteria.and("_id").nin(excludedIds);
+        }
+    
+        // Fetch posts based on categories & excluded IDs only
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(criteria),
+                Aggregation.sample(sample != null ? sample : 10) // Fetch more posts before filtering by title
+        );
+    
+        List<Post> posts = mongoTemplate.aggregate(aggregation, "post", Post.class).getMappedResults();
+    
+        // Now filter based on title text in Java
+        if (searchText != null && !searchText.isBlank()) {
+            posts = posts.stream()
+                    .filter(post -> post.getTitle().toLowerCase().contains(searchText.toLowerCase()))
+                    .collect(Collectors.toList());
+        }
+    
+        return posts;
+    }
+
+
+    private List<Post> executeAggregation(Criteria criteria, Integer sample) {
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(criteria),
+                Aggregation.sample(sample != null ? sample : 10) // Limit results
+        );
+    
+        return mongoTemplate.aggregate(aggregation, "post", Post.class).getMappedResults();
+    }
+
+
+    //search based on text only
+    public List<Post> searchByText(Set<String> excludedIds, String searchText, Integer sample) {
+        List<Criteria> criteriaList = new ArrayList<>();
+        
+        if (excludedIds != null && !excludedIds.isEmpty()) {
+            criteriaList.add(Criteria.where("_id").nin(excludedIds));
+        }
+        
+        if (searchText != null && !searchText.isBlank()) {
+            criteriaList.add(Criteria.where("title").regex(searchText, "i")); // Case-insensitive text search
+        }
+    
+        return executeAggregation(new Criteria().andOperator(criteriaList.toArray(new Criteria[0])), sample);
+    }
+    
+
+    //Search based on text
+    public List<GetAllPostCardDetails> searchPostByText(ExcludedIds excludedIds){
+        List<Post> posts = new ArrayList<>();
+        if (excludedIds.getListOfCategories()==null  ||excludedIds.getListOfCategories().isEmpty()) {
+            posts = searchByText(excludedIds.getExcludedIds(), excludedIds.getText(), excludedIds.getSample());
+        }else{
+            posts =  searchByCategories(excludedIds.getExcludedIds(),  excludedIds.getListOfCategories(),excludedIds.getSample());
+        }
+
+        List<GetAllPostCardDetails> getAllPostCardDetails = new ArrayList<>();
+        getAllPostCardDetails = posts.stream().map(post->{
+             GetAllPostCardDetails getCardDetail = new GetAllPostCardDetails();
+             getCardDetail.setCommentCount(post.getCommentCount());
+             getCardDetail.setLikeCount(post.getLikeCount());
+             getCardDetail.setPostContent(post.getContent());
+             getCardDetail.setPostId(post.getId());
+             getCardDetail.setPostImage(post.getPostImage());
+             getCardDetail.setPostTitle(post.getTitle());
+             return getCardDetail;
+        }).collect(Collectors.toList());
+
+    //    System.out.println(posts);
+       return getAllPostCardDetails;
     }
 
 }

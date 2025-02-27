@@ -12,6 +12,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+
 @Document(collection = "post")
 @Data
 @NoArgsConstructor
@@ -23,7 +24,7 @@ public class Post {
 
     private String userId;
 
-    @Size(max = 50)
+    @Size(max = 100)
     private String title;
 
     @Size(max = 100)
