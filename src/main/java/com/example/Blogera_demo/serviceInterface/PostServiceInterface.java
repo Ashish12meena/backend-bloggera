@@ -36,5 +36,6 @@ public interface PostServiceInterface {
     List<Post> searchByCategoriesThenText(Set<String> excludedIds, List<String> categories, String searchText, Integer sample);
     List<Post> searchByText(Set<String> excludedIds, String searchText, Integer sample);
     List<GetAllPostCardDetails> searchPostByText(ExcludedIds excludedIds);
+    List<Post> getPostsByPostIds(List<String> postIds);
 
 }

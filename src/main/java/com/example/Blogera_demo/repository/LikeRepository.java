@@ -1,6 +1,7 @@
 package com.example.Blogera_demo.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
@@ -23,4 +24,6 @@ public interface LikeRepository extends MongoRepository<Like,String>{
     void deleteByUserIdAndPostId(String userId, String postId);
 
     List<Like> findByUserIdAndPostIdIn(String userId, List<String> postIds);
+
+    Optional<Like> findByUserIdAndPostId(String userId, String postId);
 }

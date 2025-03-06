@@ -65,7 +65,7 @@ public class CommentController {
 
     @PostMapping("/addComment")
     public Comment addComment(@RequestBody CommentDto commentDto){
-        System.out.println(commentDto.getMessage()+"  "+commentDto.getPostId()+" before"+commentDto.getUserId()+" after");
+        System.out.println(commentDto.getCommentText()+"  "+commentDto.getPostId()+" before"+commentDto.getUserId()+" after");
         return commentService.addComment(commentDto);
         
     }

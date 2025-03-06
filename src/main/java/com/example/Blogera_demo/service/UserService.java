@@ -6,13 +6,20 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
+import org.hibernate.validator.internal.util.stereotypes.Lazy;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import com.example.Blogera_demo.dto.FindUserByEmial;
+import com.example.Blogera_demo.dto.GetBYEmailAndUserId;
 import com.example.Blogera_demo.dto.GetUserCardDetails;
+import com.example.Blogera_demo.dto.TokenFcmDto;
 import com.example.Blogera_demo.dto.UserDetails;
 import com.example.Blogera_demo.model.Post;
 
@@ -30,11 +37,15 @@ public class UserService implements UserServiceInterface {
     @Autowired
     private PostService postService;
 
-
     @Autowired
     private LikeService likeService;
 
-   
+    @Autowired
+    private FollowService followService;
+    
+
+    @Autowired
+    private MongoTemplate mongoTemplate;
 
     // Create a new user
     @Override
@@ -58,11 +69,11 @@ public class UserService implements UserServiceInterface {
         return userRepository.findAll();
     }
 
-    public List<String> getAllUserId(){
+    public List<String> getAllUserId() {
         return userRepository.findAll()
-                             .stream()
-                             .map(User::getId)  
-                             .collect(Collectors.toList());
+                .stream()
+                .map(User::getId)
+                .collect(Collectors.toList());
     }
 
     // Update a user
@@ -104,9 +115,10 @@ public class UserService implements UserServiceInterface {
     }
 
     @Override
-    public ResponseEntity<?> getUserCardData(String email) {
-         ExecutorService executor = Executors.newFixedThreadPool(4);
-        Optional<User> optionalUser = userRepository.findByEmail(email);
+    public ResponseEntity<?> getUserCardData(GetBYEmailAndUserId request) {
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+        Optional<User> optionalUser = userRepository.findByEmail(request.getEmail());
+
         if (optionalUser.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Collections.singletonMap("error", "User not found"));
@@ -114,19 +126,34 @@ public class UserService implements UserServiceInterface {
 
         User user = optionalUser.get();
         List<Post> posts = postService.getPostsByUserId(user.getId());
+        boolean followStatus = followService.isFollowing(request.getUserId(), user.getId());
+
+        // Always return user details, even if posts are empty
+        Map<String, Object> responseBody = new HashMap<>();
+        responseBody.put("user", Map.of(
+                "username", user.getUsername(),
+                "email", user.getEmail(),
+                "userId", user.getId(),
+                "followStatus", followStatus,
+                "followerCount", user.getFollowerCount(),
+                "followingCount", user.getFollowingCount(),
+                "postCount",user.getPostCount(),
+                "userBio", Optional.ofNullable(user.getBio()).orElse(""),
+                "dateOfBirth", Optional.ofNullable(user.getDateOfBirth()),
+                "profilePicture", Optional.ofNullable(user.getProfilePicture()).orElse("")));
+        responseBody.put("posts", new ArrayList<>()); // Default to an empty array
 
         if (posts == null || posts.isEmpty()) {
-            return ResponseEntity.ok(Collections.emptyList()); // Return empty list instead of casting
+            return ResponseEntity.ok(responseBody); // ✅ Return user with empty posts array
         }
 
         List<String> postIds = posts.stream().map(Post::getId).distinct().toList();
 
         // Fetch likes asynchronously
         CompletableFuture<Map<String, Boolean>> likeFuture = CompletableFuture.supplyAsync(
-                () -> likeService.getLikeStatus(user.getId(), postIds),
-                executor);
+                () -> likeService.getLikeStatus(user.getId(), postIds), executor);
 
-        // Fetch images asynchronously for each post
+        // Fetch post details asynchronously
         List<CompletableFuture<GetUserCardDetails>> postFutures = posts.stream()
                 .map(post -> CompletableFuture.supplyAsync(() -> {
 
@@ -137,7 +164,7 @@ public class UserService implements UserServiceInterface {
                     getCardDetails.setCommentCount(post.getCommentCount());
                     getCardDetails.setLikeCount(post.getLikeCount());
                     getCardDetails.setPostContent(post.getContent());
-                    getCardDetails.setPostImage(null);  
+                    getCardDetails.setPostImage(null);
                     getCardDetails.setPostTitle(post.getTitle());
                     getCardDetails.setLikeStatus(likeStatus);
 
@@ -150,13 +177,7 @@ public class UserService implements UserServiceInterface {
                 .map(CompletableFuture::join)
                 .collect(Collectors.toList());
 
-        // Prepare response
-        Map<String, Object> responseBody = new HashMap<>();
-        responseBody.put("user", Map.of(
-                "username", user.getUsername(),
-                "email", user.getEmail(),
-                "profilePicture", Optional.ofNullable(user.getProfilePicture()).orElse("")));
-        responseBody.put("posts", getCardDetailsList);
+        responseBody.put("posts", getCardDetailsList); // ✅ Only replace empty posts if there are actual posts
 
         return ResponseEntity.ok().body(responseBody);
     }
@@ -170,5 +191,68 @@ public class UserService implements UserServiceInterface {
         userDetails.setUsername(user.getUsername());
         userDetails.setProfilePicture(user.getProfilePicture());
         return userDetails;
+    }
+
+    @Override
+    public void saveFCMToken(TokenFcmDto fcmTokenDto) {
+        System.out.println("Updating FCM Token : " + fcmTokenDto.getFcmToken());
+        Query query = new Query(Criteria.where("_id").is(fcmTokenDto.getUserId()));
+        Update update = new Update().set("fcmWebToken", fcmTokenDto.getFcmToken());
+
+        mongoTemplate.updateFirst(query, update, User.class);
+        System.out.println("FCM Token updated successfully for user: " + fcmTokenDto.getUserId());
+    }
+
+    @Override
+    public List<User> getUsersByIds(List<String> userIds) {
+        return userRepository.findAllById(userIds);
+    }
+
+    @Override
+    public void incrementFollowerCount(String userId) {
+        System.out.println("Incrementing follower count for user: " + userId);
+
+        Query query = new Query(Criteria.where("id").is(userId));
+        Update update = new Update().inc("followerCount", 1); // Increment likeCount by 1
+        mongoTemplate.updateFirst(query, update, User.class);
+    }
+
+    @Override
+    public void decrementFollowerCount(String userId) {
+
+        Query query = new Query(Criteria.where("id").is(userId));
+        Update update = new Update().inc("followerCount", -1); // Increment likeCount by 1
+        mongoTemplate.updateFirst(query, update, User.class);
+    }
+
+    @Override
+    public void incrementFollowingCount(String userId) {
+
+        Query query = new Query(Criteria.where("id").is(userId));
+        Update update = new Update().inc("followingCount", 1); // Increment likeCount by 1
+        mongoTemplate.updateFirst(query, update, User.class);
+    }
+
+    @Override
+    public void decrementFollowingCount(String userId) {
+
+        Query query = new Query(Criteria.where("id").is(userId));
+        Update update = new Update().inc("followingCount", -1); // Increment likeCount by 1
+        mongoTemplate.updateFirst(query, update, User.class);
+    }
+    
+    public void incrementPostCount(String userId) {
+        System.out.println("Incrementing post count for user: " + userId);
+        Query query = new Query(Criteria.where("id").is(userId));
+        Update update = new Update().inc("postCount", 1); // Increment likeCount by 1
+        mongoTemplate.updateFirst(query, update, User.class);
+    }
+
+    
+    public void decrementPostCount(String userId) {
+
+        Query query = new Query(Criteria.where("id").is(userId));
+        Update update = new Update().inc("postCount", -1); // Increment likeCount by 1
+        mongoTemplate.updateFirst(query, update, User.class);
     }
 }

@@ -48,4 +48,12 @@ public class User {
     private String bio;
 
     private String subscriptionId;
+
+    private String fcmWebToken;
+
+    private long followerCount;
+
+    private long followingCount;
+
+    private long postCount;
 }

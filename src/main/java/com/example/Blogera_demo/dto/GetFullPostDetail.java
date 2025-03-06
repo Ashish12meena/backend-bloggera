@@ -18,5 +18,6 @@ public class GetFullPostDetail {
     private long likeCount;
     private List<String> comments;
     private long commentCount;
+    private String userEmail;
     private boolean likeStatus;
 }

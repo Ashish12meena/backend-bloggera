@@ -45,7 +45,7 @@ public class LikeController {
 
     @PostMapping("/removelike")
     public boolean removeLike(@RequestBody LikeDetails likeDetails){
-        
+        System.out.println("Befoe remove like");
         likeService.removeLike(likeDetails.getPostId(),likeDetails.getUserId());
         return true;
     }

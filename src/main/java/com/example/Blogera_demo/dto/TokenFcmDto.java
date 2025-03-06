@@ -1,9 +1,9 @@
 package com.example.Blogera_demo.dto;
+
 import lombok.Data;
 
 @Data
-public class CommentDto {
-    private String postId;
+public class TokenFcmDto {
     private String userId;
-    private String commentText;
+    private String fcmToken;
 }

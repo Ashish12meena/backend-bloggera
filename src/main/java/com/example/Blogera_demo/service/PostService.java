@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 // import org.slf4j.Logger;
 // import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
@@ -35,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.example.Blogera_demo.dto.ExcludedIds;
 import com.example.Blogera_demo.dto.GetAllPostCardDetails;
 import com.example.Blogera_demo.dto.GetFullPostDetail;
+import com.example.Blogera_demo.exceptions.UserNotFoundException;
 import com.example.Blogera_demo.model.Comment;
 import com.example.Blogera_demo.model.Post;
 
@@ -50,6 +52,11 @@ public class PostService implements PostServiceInterface{
 
     // private static final Logger logger =
     // LoggerFactory.getLogger(PostService.class);
+    private final UserService userService;
+
+    public PostService(@Lazy UserService userService) {
+        this.userService = userService;
+    }
 
     @Autowired
     private PostRepository postRepository;
@@ -74,6 +81,7 @@ public class PostService implements PostServiceInterface{
 
 
     //Create Post
+    @Override
     public Post createPost(String userId, Post post) {
 
         Optional<User> userOptional = userRepository.findById(userId);
@@ -82,12 +90,14 @@ public class PostService implements PostServiceInterface{
             post.setUserId(userOptional.get().getId()); // Set the user as the author of the post
             post.setCreatedAt(LocalDateTime.now());
             post.setUpdatedAt(LocalDateTime.now());
-            return postRepository.save(post); // Save post to MongoDB
+            post = postRepository.save(post);
+            userService.incrementPostCount(userId);
+            return post; 
         } else {
             // Handle user not found scenario
-            throw new RuntimeException("User not found with ID: " + userId);
+            throw new UserNotFoundException("User not found with ID: " + userId);
         }
-    }
+    }   
 
     // get Post By UserId
     public List<Post> getPostsByUserId(String email) {
@@ -138,11 +148,13 @@ public class PostService implements PostServiceInterface{
         getFullPostDetail.setProfilePicture(profilePicture);
         getFullPostDetail.setUsername(username);
         getFullPostDetail.setLikeStatus(status);
+        getFullPostDetail.setUserEmail(user.getEmail());
 
         return getFullPostDetail;
     }
 
     // get List of post Card Details of specific user 
+    @Override
     public List<GetAllPostCardDetails> getCardDetails(String currentUserId,Set<String> excludedIds, List<String> categories) {
 
         // Fetch posts in a single query
@@ -192,6 +204,7 @@ public class PostService implements PostServiceInterface{
                     if (user != null) {
                         details.setUsername(user.getUsername());
                         details.setProfilePicture(user.getProfilePicture());
+                        details.setUserEmail(user.getEmail());
                     }
                     return details;
                 }).toList(); // Parallel processing for better performance
@@ -486,6 +499,11 @@ public class PostService implements PostServiceInterface{
 
     //    System.out.println(posts);
        return getAllPostCardDetails;
+    }
+
+    @Override
+    public List<Post> getPostsByPostIds(List<String> postIds) {
+        return postRepository.findAllById(postIds);
     }
 
 }

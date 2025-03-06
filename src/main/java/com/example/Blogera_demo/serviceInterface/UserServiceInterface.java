@@ -6,6 +6,8 @@ import java.util.Optional;
 import org.springframework.http.ResponseEntity;
 
 import com.example.Blogera_demo.dto.FindUserByEmial;
+import com.example.Blogera_demo.dto.GetBYEmailAndUserId;
+import com.example.Blogera_demo.dto.TokenFcmDto;
 import com.example.Blogera_demo.dto.UserDetails;
 import com.example.Blogera_demo.model.User;
 
@@ -18,6 +20,8 @@ public interface UserServiceInterface {
 
     List<String> getAllUserId();
 
+    List<User> getUsersByIds(List<String> userIds);
+ 
     User updateUser(String id, User userDetails);
 
     void deleteUser(String id);
@@ -26,8 +30,18 @@ public interface UserServiceInterface {
 
     User getUserByEmail(String email);
 
-    ResponseEntity<?> getUserCardData(String email);
+    ResponseEntity<?> getUserCardData(GetBYEmailAndUserId request);
 
     UserDetails validateToken(FindUserByEmial findUserByEmial);
+
+    void saveFCMToken(TokenFcmDto fcmTokenDto);
+
+    void incrementFollowerCount(String userId);
+
+    void decrementFollowerCount(String userId);
+
+    void incrementFollowingCount(String userId);
+
+    void decrementFollowingCount(String userId);
 
 }

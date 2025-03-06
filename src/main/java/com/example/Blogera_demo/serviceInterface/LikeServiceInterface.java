@@ -10,6 +10,7 @@ public interface LikeServiceInterface {
     Like createLike(Like like);
     List<Like> getLikesForPost(String postId);
     List<Like> getLikesByUser(String userId);
+    Like getLikeByUserIdAndPostId(String userId, String postId);
     Long getLikesCountForPost(String postId);
     boolean checkIfLiked(String postId, String userId);
     Map<String, Boolean> getLikeStatus(String userId, List<String> postIds);

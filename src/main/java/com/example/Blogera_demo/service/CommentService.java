@@ -2,16 +2,19 @@ package com.example.Blogera_demo.service;
 
 import com.example.Blogera_demo.dto.CommentCardDetails;
 import com.example.Blogera_demo.dto.CommentDto;
+import com.example.Blogera_demo.dto.NotificationDto;
 import com.example.Blogera_demo.exceptions.ResourceNotFoundException;
 import com.example.Blogera_demo.model.Comment;
 import com.example.Blogera_demo.model.User;
 import com.example.Blogera_demo.repository.CommentRepository;
 import com.example.Blogera_demo.serviceInterface.CommentServiceInterface;
+import com.example.Blogera_demo.utility.ActionType;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +33,10 @@ public class CommentService implements CommentServiceInterface {
     @Autowired
     @Lazy
     private PostService postService;
+
+    @Autowired
+    @Lazy
+    private NotificationService notificationService;
 
     @Autowired
     MongoTemplate mongoTemplate;
@@ -84,13 +91,13 @@ public class CommentService implements CommentServiceInterface {
         commentRepository.delete(comment);
     }
 
-    //get Comment Count By post
+    // get Comment Count By post
     @Override
     public long getCommentCountForPost(String postId) {
         return commentRepository.countByPostId(postId);
     }
 
-    //get Comment Card Details 
+    // get Comment Card Details
     @Override
     public CommentCardDetails getCommentCardDetails(String commentId) {
         CommentCardDetails commentCardDetails = new CommentCardDetails();
@@ -108,18 +115,39 @@ public class CommentService implements CommentServiceInterface {
         return commentCardDetails;
     }
 
-    //Add Comment 
+    // Add Comment
     @Override
+    @Transactional // Ensures atomicity
     public Comment addComment(CommentDto commentDto) {
-        System.out.println("in addComment" + commentDto.getUserId());
+
+        // Create and save the comment
         Comment comment = new Comment();
-        // postService.getPostsByPostId();
-        comment.setLocalDateTime(LocalDateTime.now());
-        comment.setMessage(commentDto.getMessage());
+        comment.setLocalDateTime(LocalDateTime.now()); // Ensure correct setter
+        comment.setMessage(commentDto.getCommentText());
         comment.setPostId(commentDto.getPostId());
         comment.setUserId(commentDto.getUserId());
-         postService.incrementCommentCount(commentDto.getPostId());
-        return commentRepository.save(comment);
 
+        Comment savedComment = commentRepository.save(comment);
+
+        // Increment comment count
+        postService.incrementCommentCount(commentDto.getPostId());
+
+        // Prepare notification
+        NotificationDto notificationDto = new NotificationDto();
+        notificationDto.setActionType(ActionType.COMMENT);
+        notificationDto.setCommentText(commentDto.getCommentText());
+        notificationDto.setPostId(commentDto.getPostId());
+        notificationDto.setUserId(commentDto.getUserId());
+
+        // Send notification with error handling
+        try {
+            notificationService.addNotification(notificationDto);
+        } catch (Exception e) {
+            // Log error without interrupting comment saving
+            System.err.println("Failed to send notification: " + e.getMessage());
+        }
+
+        return savedComment;
     }
+
 }

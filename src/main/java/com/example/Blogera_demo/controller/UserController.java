@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.Blogera_demo.dto.FindUserByEmial;
+import com.example.Blogera_demo.dto.GetBYEmailAndUserId;
+import com.example.Blogera_demo.dto.TokenFcmDto;
 import com.example.Blogera_demo.dto.UserDetails;
 import com.example.Blogera_demo.service.UserService;
 
@@ -25,9 +27,9 @@ public class UserController {
     UserService userService;
 
     @PostMapping("/userdetails")
-    public ResponseEntity<?> getLoggedInUser(@RequestBody FindUserByEmial userEmail){
+    public ResponseEntity<?> getLoggedInUser(@RequestBody GetBYEmailAndUserId request){
         
-        return userService.getUserCardData(userEmail.getEmail());
+        return userService.getUserCardData(request);
     }
 
     @PostMapping("/validateToken")
@@ -35,6 +37,13 @@ public class UserController {
         
 
         return userService.validateToken(findUserByEmial);
+    }
+
+    @PostMapping("/save-fcm-token")
+    public ResponseEntity<?> saveFCMToken(@RequestBody TokenFcmDto fcmTokenDto){
+        userService.saveFCMToken(fcmTokenDto);
+        return ResponseEntity.ok().body("Token saved");
+
     }
 
     @GetMapping("/allusers")
