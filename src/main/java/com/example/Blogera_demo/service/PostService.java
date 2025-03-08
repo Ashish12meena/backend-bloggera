@@ -112,7 +112,6 @@ public class PostService implements PostServiceInterface{
 
     // get GetFullPostDetail By postId and UserId
     public GetFullPostDetail getFullPostDetails(String postId, String currentUserId) {
-        System.out.println("postId " + postId + " userId " + currentUserId);
         ExecutorService executor = Executors.newFixedThreadPool(4);
 
         CompletableFuture<Post> postFuture = CompletableFuture.supplyAsync(() -> getPostsByPostId(postId), executor);
@@ -131,7 +130,6 @@ public class PostService implements PostServiceInterface{
 
         List<String> comments = commentsFuture.join();
         boolean status = likeStatusFuture.join();
-        System.out.println(status + " Status of like");
 
         executor.shutdown();
 
@@ -298,7 +296,6 @@ public class PostService implements PostServiceInterface{
     }
 
     public List<Post> getAllPosts(Set<String> excludedIds) {
-        System.out.println(excludedIds + "get All post in service");
         AggregationOperation matchStage = Aggregation.match(
                 org.springframework.data.mongodb.core.query.Criteria.where("_id").nin(excludedIds));
 
@@ -313,7 +310,6 @@ public class PostService implements PostServiceInterface{
     public List<Post> getAllFilteredPosts(Set<String> excludedIds, List<String> categories)
     throws InterruptedException, ExecutionException {
                 
-        System.out.println(excludedIds + " " + categories);
         Set<Post> uniquePosts = ConcurrentHashMap.newKeySet();
 
         ExecutorService executorService = Executors.newFixedThreadPool(4);

@@ -10,7 +10,5 @@ import com.example.Blogera_demo.model.Follow;
 @Repository
 public interface FollowRepository extends  MongoRepository<Follow,String> {
     void deleteByFollowerIdAndFollowingId(String followerId, String followingId);
-
-    
     boolean existsByFollowerIdAndFollowingId(String followerId, String followingId);
 }

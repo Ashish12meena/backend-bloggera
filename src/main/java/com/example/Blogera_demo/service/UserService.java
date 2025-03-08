@@ -5,8 +5,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
-
-import org.hibernate.validator.internal.util.stereotypes.Lazy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -195,12 +193,10 @@ public class UserService implements UserServiceInterface {
 
     @Override
     public void saveFCMToken(TokenFcmDto fcmTokenDto) {
-        System.out.println("Updating FCM Token : " + fcmTokenDto.getFcmToken());
         Query query = new Query(Criteria.where("_id").is(fcmTokenDto.getUserId()));
         Update update = new Update().set("fcmWebToken", fcmTokenDto.getFcmToken());
 
         mongoTemplate.updateFirst(query, update, User.class);
-        System.out.println("FCM Token updated successfully for user: " + fcmTokenDto.getUserId());
     }
 
     @Override
@@ -210,7 +206,6 @@ public class UserService implements UserServiceInterface {
 
     @Override
     public void incrementFollowerCount(String userId) {
-        System.out.println("Incrementing follower count for user: " + userId);
 
         Query query = new Query(Criteria.where("id").is(userId));
         Update update = new Update().inc("followerCount", 1); // Increment likeCount by 1
@@ -242,7 +237,6 @@ public class UserService implements UserServiceInterface {
     }
     
     public void incrementPostCount(String userId) {
-        System.out.println("Incrementing post count for user: " + userId);
         Query query = new Query(Criteria.where("id").is(userId));
         Update update = new Update().inc("postCount", 1); // Increment likeCount by 1
         mongoTemplate.updateFirst(query, update, User.class);

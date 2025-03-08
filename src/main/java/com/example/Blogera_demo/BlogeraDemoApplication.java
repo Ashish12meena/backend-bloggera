@@ -12,4 +12,4 @@ public class BlogeraDemoApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(BlogeraDemoApplication.class, args);
 	}
-}				
+}					

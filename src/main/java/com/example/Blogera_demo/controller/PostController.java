@@ -41,22 +41,13 @@ public class PostController {
 
     @PostMapping("/cardDetails")
     public List<GetAllPostCardDetails> getCartDetails(@RequestBody ExcludedIds excludedIds) {
-
-        System.out.println("count time"+ excludedIds.getUserId());
-        long startTime = System.currentTimeMillis();
         List<GetAllPostCardDetails> getAllPostCardDetails = postService.getCardDetails(excludedIds.getUserId(),excludedIds.getExcludedIds(),excludedIds.getListOfCategories());
-        long endTime = System.currentTimeMillis();
-        System.out.println("Time taken: " + (endTime - startTime) + " ms");
         return getAllPostCardDetails;
     }
 
     @PostMapping("/data")
     public List<GetAllPostCardDetails> getData() {
-        System.out.println("count time");
-        long startTime = System.currentTimeMillis();
         List<GetAllPostCardDetails> getAllPostCardDetails = postService.getData();
-        long endTime = System.currentTimeMillis();
-        System.out.println("Time taken: " + (endTime - startTime) + " ms");
         return getAllPostCardDetails;
     }
 
@@ -121,7 +112,6 @@ public class PostController {
     }
     @PostMapping("/search")
     public List<GetAllPostCardDetails> searchPosts(@RequestBody ExcludedIds excludedIds) {
-        System.out.println(excludedIds.getExcludedIds()+" "+excludedIds.getText()+" "+excludedIds.getSample());
         return postService.searchPostByText(excludedIds);
         // return null;
     }

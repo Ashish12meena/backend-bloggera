@@ -21,7 +21,6 @@ public class FCMService {
                         
                 .build();
 
-        System.out.println("Message "+message);
         return FirebaseMessaging.getInstance().sendAsync(message).get();
     }
 }

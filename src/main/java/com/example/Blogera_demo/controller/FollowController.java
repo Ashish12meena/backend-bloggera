@@ -28,7 +28,6 @@ public class FollowController {
     
     @PostMapping("/add")
     public ResponseEntity<?> addFollower(@RequestBody AddFollower addFollower){
-        System.out.println("Add follower"+ addFollower.getFollowedUserId()+" "+addFollower.getFollowedUserId());
         Follow follow = followService.addFollower(addFollower);
         if (follow!=null) {
             return ResponseEntity.ok().body("Follower added");

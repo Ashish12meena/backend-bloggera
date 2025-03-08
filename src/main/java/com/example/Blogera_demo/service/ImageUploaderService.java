@@ -52,7 +52,6 @@ public class ImageUploaderService implements ImageUploaderServiceInterface{
 
             return this.getPublicUrl(filename);
         } catch (IOException e) {
-            System.out.println("Image Exception");
             e.printStackTrace();
         }
         return null;

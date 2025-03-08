@@ -143,7 +143,6 @@ public class CommentService implements CommentServiceInterface {
         try {
             notificationService.addNotification(notificationDto);
         } catch (Exception e) {
-            // Log error without interrupting comment saving
             System.err.println("Failed to send notification: " + e.getMessage());
         }
 

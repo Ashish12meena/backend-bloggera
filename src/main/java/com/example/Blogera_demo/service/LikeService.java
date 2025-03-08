@@ -128,20 +128,15 @@ public class LikeService implements LikeServiceInterface {
     @Override
     public void removeLike(String postId, String userId) {
         // Check if the like exists before attempting to remove it
-        System.out.println("In remove like");
         Like like = getLikeByUserIdAndPostId(userId, postId);
-        System.out.println("Like found "+ like);
 
         if (like != null) {
             // Remove like and decrement count
             likeRepository.deleteByUserIdAndPostId(userId, postId);
             postService.decrementLikeCount(postId);
-            System.out.println("Like removed and count decremented");
-
             // Delete associated notification
             notificationService.deleteNotification(userId, postId);
         } else {
-            System.out.println("Like not found, no action taken.");
         }
     }
 

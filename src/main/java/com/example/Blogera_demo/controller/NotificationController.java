@@ -31,18 +31,15 @@ public class NotificationController {
     @PostMapping("/send")
     public ResponseEntity<?> sendNotification(@RequestBody NotificationRequest request) {
         try {
-            System.out.println("In controller " + request);
             String response = fcmService.sendNotification(request.getToken(), request.getTitle(), request.getBody());
             return ResponseEntity.ok(response);
         } catch (ExecutionException | InterruptedException e) {
-            System.out.println("Error sending notification: " + e.getMessage());
             return ResponseEntity.status(500).body("Error sending notification: " + e.getMessage());
         }
     }
 
     @PostMapping("/unread-notification")
     public List<SendNotificationDto> getNotificationData(@RequestBody FindByUserId findByUserId) {
-        System.out.println("In controller " + findByUserId.getUserId());
         return notificationService.getNotificationData(findByUserId.getUserId());
     }   
 

@@ -58,9 +58,7 @@ public class FollowService implements FollowServiceInterface{
 
     @Override
     public boolean isFollowing(String followerId, String followingId) {
-        System.out.println(followerId+" : "+followingId+" In isFollowing");
         boolean status = followRepository.existsByFollowerIdAndFollowingId(followerId, followingId);
-        System.out.println(status+"status");
         return status;
     }
 

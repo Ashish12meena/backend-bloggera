@@ -100,7 +100,6 @@ public class NotificationService implements NotificationServiceInterface {
 
     @Override
     public List<SendNotificationDto> getNotificationData(String userId) {
-        System.out.println("In service " + userId);
         List<Notification> listOfUnreadNotifications = getUnreadNotifications(userId);
         if (listOfUnreadNotifications == null || listOfUnreadNotifications.isEmpty()) {
             return Collections.emptyList();
@@ -111,21 +110,18 @@ public class NotificationService implements NotificationServiceInterface {
                 .filter(Objects::nonNull) // Avoid null values
                 .collect(Collectors.toSet());
 
-        System.out.println("sender UserIds" + senderUserIds);
 
         Set<String> postIds = listOfUnreadNotifications.stream()
                 .map(Notification::getPostId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        System.out.println("postIds" + postIds);
 
         List<Post> posts = postService.getPostsByPostIds(new ArrayList<>(postIds));
         if (posts == null)
             posts = Collections.emptyList();
 
         List<User> users = userService.getUsersByIds(new ArrayList<>(senderUserIds));
-        System.out.println("users" + users);
 
         if (users == null)
             users = Collections.emptyList();
@@ -136,7 +132,6 @@ public class NotificationService implements NotificationServiceInterface {
                         (a, b) -> a 
                 ));
 
-        System.out.println("postIdTopostImageMap" + postIdTopostImageMap);
         Map<String, String> userIdToUsernameMap = users.stream()
                 .collect(Collectors.toMap(
                         User::getId,
@@ -144,12 +139,10 @@ public class NotificationService implements NotificationServiceInterface {
                         (a, b) -> a // Keep the first value in case of duplicates
                 ));
 
-        System.out.println("userIdToUsernameMap" + userIdToUsernameMap);
         Map<String, String> userIdToUserImageMap = users.stream()
                 .collect(Collectors.toMap(
                         User::getId,
                         user -> Objects.toString(user.getProfilePicture(), "")));
-        System.out.println("userIdToUserImageMap" + userIdToUserImageMap);
 
         return listOfUnreadNotifications.stream()
                 .filter(Objects::nonNull) // Prevent null notifications
